@@ -1,3 +1,5 @@
+from edit_distance import levenshtein_distance
+
 class TrieNode:
     def __init__(self):
         self.children = {}
@@ -168,3 +170,59 @@ class Trie:
                 stack.append(child)
 
         return node_count, suggestion_entries
+
+    
+    def generate_candidates(self, query, max_distance=2):
+        """
+        Generate words within max_distance using Trie-based
+        Levenshtein search with branch pruning.
+
+        Returns:
+            List of (word, edit_distance) tuples, sorted by
+            distance and then alphabetically.
+        """
+        query = query.lower()
+
+        if max_distance < 0:
+            raise ValueError("max_distance must be non-negative")
+
+        candidates = []
+        query_length = len(query)
+
+        # Initial DP row: distance from empty word to query prefixes.
+        initial_row = list(range(query_length + 1))
+
+        def search(node, current_word, previous_row):
+            # Record a complete word if its distance is acceptable.
+            if node.is_end_of_word:
+                distance = previous_row[query_length]
+                if distance <= max_distance:
+                    candidates.append((current_word, distance))
+
+            # Explore each child while updating the DP row.
+            for char, child_node in node.children.items():
+                current_row = [previous_row[0] + 1]
+
+                for column in range(1, query_length + 1):
+                    insert_cost = current_row[column - 1] + 1
+                    delete_cost = previous_row[column] + 1
+                    replace_cost = previous_row[column - 1] + (
+                        0 if query[column - 1] == char else 1
+                    )
+
+                    current_row.append(
+                        min(insert_cost, delete_cost, replace_cost)
+                    )
+
+                # If no prefix can be within the limit, prune this branch.
+                if min(current_row) <= max_distance:
+                    search(
+                        child_node,
+                        current_word + char,
+                        current_row
+                    )
+
+        search(self.root, "", initial_row)
+
+        candidates.sort(key=lambda item: (item[1], item[0]))
+        return candidates
